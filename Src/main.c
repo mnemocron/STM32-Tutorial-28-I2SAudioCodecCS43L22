@@ -35,7 +35,7 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PI 3.1415926f
-#define F_S 50000.0f
+#define F_S 48828.0f
 #define F_OUT 1000.0f
 /* USER CODE END PD */
 
@@ -45,10 +45,6 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc2;
-
-DAC_HandleTypeDef hdac;
-
 I2C_HandleTypeDef hi2c1;
 
 I2S_HandleTypeDef hi2s3;
@@ -64,7 +60,7 @@ float sample_dt;
 uint16_t sample_N;
 uint16_t i_t;
 uint32_t myDacVal;
-uint16_t dummyI2S[4];
+uint16_t dataI2S[100];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -74,8 +70,6 @@ static void MX_DMA_Init(void);
 static void MX_I2C1_Init(void);
 static void MX_I2S3_Init(void);
 static void MX_SPI1_Init(void);
-static void MX_ADC2_Init(void);
-static void MX_DAC_Init(void);
 static void MX_TIM2_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -120,19 +114,25 @@ int main(void)
   MX_I2C1_Init();
   MX_I2S3_Init();
   MX_SPI1_Init();
-  MX_ADC2_Init();
-  MX_DAC_Init();
   MX_TIM2_Init();
   /* USER CODE BEGIN 2 */
-  CS43_Init(hi2c1, MODE_ANALOG);
-  CS43_SetVolume(50);
+  CS43_Init(hi2c1, MODE_I2S);
+  CS43_SetVolume(15);
   CS43_Enable_RightLeft(CS43_RIGHT_LEFT);
   CS43_Start();
 
-  HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t *)dummyI2S, 4);
+  //Build Sine wave
+	for(uint16_t i=0; i<sample_N; i++)
+	{
+		mySinVal = sinf(i*2*PI*sample_dt);
+		dataI2S[i*2] = (mySinVal )*4000;    //Right data (0 2 4 6 8 10 12)
+		dataI2S[i*2 + 1] =(mySinVal )*4000; //Left data  (1 3 5 7 9 11 13)
+	}
 
-  HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
-  HAL_TIM_Base_Start_IT(&htim2);
+  HAL_I2S_Transmit_DMA(&hi2s3, (uint16_t *)dataI2S, sample_N*2);
+
+  // HAL_DAC_Start(&hdac, DAC_CHANNEL_1);
+  // HAL_TIM_Base_Start_IT(&htim2);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -194,94 +194,6 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-}
-
-/**
-  * @brief ADC2 Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_ADC2_Init(void)
-{
-
-  /* USER CODE BEGIN ADC2_Init 0 */
-
-  /* USER CODE END ADC2_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC2_Init 1 */
-
-  /* USER CODE END ADC2_Init 1 */
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
-  */
-  hadc2.Instance = ADC2;
-  hadc2.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-  hadc2.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc2.Init.ScanConvMode = DISABLE;
-  hadc2.Init.ContinuousConvMode = DISABLE;
-  hadc2.Init.DiscontinuousConvMode = DISABLE;
-  hadc2.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc2.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc2.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc2.Init.NbrOfConversion = 1;
-  hadc2.Init.DMAContinuousRequests = DISABLE;
-  hadc2.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  if (HAL_ADC_Init(&hadc2) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time. 
-  */
-  sConfig.Channel = ADC_CHANNEL_4;
-  sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
-  if (HAL_ADC_ConfigChannel(&hadc2, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC2_Init 2 */
-
-  /* USER CODE END ADC2_Init 2 */
-
-}
-
-/**
-  * @brief DAC Initialization Function
-  * @param None
-  * @retval None
-  */
-static void MX_DAC_Init(void)
-{
-
-  /* USER CODE BEGIN DAC_Init 0 */
-
-  /* USER CODE END DAC_Init 0 */
-
-  DAC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN DAC_Init 1 */
-
-  /* USER CODE END DAC_Init 1 */
-  /** DAC Initialization 
-  */
-  hdac.Instance = DAC;
-  if (HAL_DAC_Init(&hdac) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** DAC channel OUT1 config 
-  */
-  sConfig.DAC_Trigger = DAC_TRIGGER_NONE;
-  sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_ENABLE;
-  if (HAL_DAC_ConfigChannel(&hdac, &sConfig, DAC_CHANNEL_1) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN DAC_Init 2 */
-
-  /* USER CODE END DAC_Init 2 */
-
 }
 
 /**
@@ -558,24 +470,24 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  /* Prevent unused argument(s) compilation warning */
-  UNUSED(htim);
-
-  /* NOTE : This function should not be modified, when the callback is needed,
-            the HAL_TIM_PeriodElapsedCallback could be implemented in the user file
-   */
-  if(htim->Instance == TIM2){
-	  mySinVal = sinf(i_t * 2 * PI * sample_dt);
-	  myDacVal = (mySinVal + 1)*127;
-	  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_8B_R, myDacVal);
-	  i_t++;
-	  if(i_t >= sample_N) i_t = 0;
-  }
-
-
-}
+//void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+//{
+//  /* Prevent unused argument(s) compilation warning */
+//  UNUSED(htim);
+//
+//  /* NOTE : This function should not be modified, when the callback is needed,
+//            the HAL_TIM_PeriodElapsedCallback could be implemented in the user file
+//   */
+//  if(htim->Instance == TIM2){
+//	  mySinVal = sinf(i_t * 2 * PI * sample_dt);
+//	  myDacVal = (mySinVal + 1)*127;
+//	  HAL_DAC_SetValue(&hdac, DAC_CHANNEL_1, DAC_ALIGN_8B_R, myDacVal);
+//	  i_t++;
+//	  if(i_t >= sample_N) i_t = 0;
+//  }
+//
+//
+//}
 
 /* USER CODE END 4 */
 
